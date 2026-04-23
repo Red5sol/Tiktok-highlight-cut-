@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TikTok Highlight Cutter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --accent: #ff2d55;
+    --accent2: #ff6b35;
+    --text: #f0f0f5;
+    --muted: #555570;
+    --border: #2a2a3a;
+    --green: #00e5a0;
+    --yellow: #ffd60a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* NOISE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  .app {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+
+  .logo-mark {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  h1 span {
+    color: var(--accent);
+  }
+
+  .badge {
+    margin-left: auto;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 100px;
+    letter-spacing: 1px;
+  }
+
+  /* DROP ZONE */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 60px 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s;
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .drop-zone::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 120%, rgba(255,45,85,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(255,45,85,0.04);
+  }
+
+  .drop-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    display: block;
+    filter: grayscale(0.3);
+  }
+
+  .drop-zone h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .drop-zone p {
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-family: 'Space Mono', monospace;
+  }
+
+  #fileInput { display: none; }
+
+  /* MAIN WORKSPACE */
+  .workspace {
+    display: none;
+    gap: 24px;
+    flex-direction: column;
+  }
+
+  .workspace.active { display: flex; }
+
+  /* VIDEO PLAYER SECTION */
+  .player-row {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .video-container {
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    aspect-ratio: 9/16;
+    max-height: 480px;
+    margin: auto;
+    width: 100%;
+    max-width: 270px;
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  /* CONTROLS PANEL */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .panel-title {
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .param-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .param-label {
+    font-size: 0.85rem;
+    color: var(--text);
+  }
+
+  .param-label small {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin-top: 2px;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 120px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  .value-display {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    width: 100%;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.88;
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-primary:disabled {
+    opacity: 0.4;
+    transform: none;
+    cursor: not-allowed;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+
+  .btn-outline:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn-green {
+    background: var(--green);
+    color: #000;
+    font-size: 0.8rem;
+    padding: 7px 14px;
+  }
+
+  .btn-green:hover { opacity: 0.85; }
+
+  /* WAVEFORM */
+  .waveform-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .waveform-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  #waveformCanvas {
+    width: 100%;
+    height: 90px;
+    cursor: crosshair;
+    border-radius: 6px;
+    background: var(--bg);
+  }
+
+  .time-cursor {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* HIGHLIGHTS LIST */
+  .highlights-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .highlights-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .count-badge {
+    background: var(--accent);
+    color: white;
+    font-size: 0.7rem;
+    font-family: 'Space Mono', monospace;
+    padding: 2px 8px;
+    border-radius: 100px;
+  }
+
+  .highlights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+
+  .highlight-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s;
+  }
+
+  .highlight-card:hover { border-color: var(--accent); }
+
+  .highlight-card.selected {
+    border-color: var(--green);
+    background: rgba(0,229,160,0.04);
+  }
+
+  .hl-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .hl-index {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  .hl-score {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .score-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  .hl-times {
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  .hl-times span {
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+  }
+
+  .hl-duration {
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  .hl-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .checkbox-area {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .checkbox-area input { cursor: pointer; accent-color: var(--green); }
+
+  /* EXPORT BAR */
+  .export-bar {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    display: none;
+  }
+
+  .export-bar.visible { display: flex; }
+
+  .export-info { flex: 1; font-size: 0.85rem; }
+  .export-info strong { color: var(--green); }
+  .export-info small { color: var(--muted); font-family: 'Space Mono', monospace; font-size: 0.7rem; display: block; margin-top: 2px; }
+
+  /* PROGRESS */
+  .progress-wrap {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 10px;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.15s;
+  }
+
+  /* STATUS */
+  .status {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 8px;
+  }
+
+  .status.info { background: rgba(255,45,85,0.1); color: var(--accent); border: 1px solid rgba(255,45,85,0.2); }
+  .status.success { background: rgba(0,229,160,0.1); color: var(--green); border: 1px solid rgba(0,229,160,0.2); }
+  .status.warn { background: rgba(255,214,10,0.1); color: var(--yellow); border: 1px solid rgba(255,214,10,0.2); }
+
+  /* SPINNER */
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .divider { height: 1px; background: var(--border); margin: 4px 0 12px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 32px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* TOOLTIP */
+  .tooltip {
+    position: fixed;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+  }
+
+  /* ─── TIKTOK DOWNLOADER BLOCK ─── */
+  .tiktok-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 0;
+  }
+
+  .tiktok-block::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #ff2d55, #ff6b35, #ffd60a, #00e5a0);
+  }
+
+  .tiktok-block-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .tiktok-icon {
+    width: 36px; height: 36px;
+    background: #000;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    border: 1px solid var(--border);
+  }
+
+  .tiktok-block-header h3 {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .tiktok-block-header p {
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin-top: 2px;
+  }
+
+  .api-key-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+
+  .input-wrap {
+    position: relative;
+    flex: 1;
+  }
+
+  .input-wrap input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .input-wrap input:focus { border-color: var(--accent); }
+  .input-wrap input::placeholder { color: var(--muted); }
+
+  .input-wrap .input-icon {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--muted);
+    transition: color 0.2s;
+  }
+
+  .input-wrap .input-icon:hover { color: var(--text); }
+
+  .url-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .url-row .input-wrap { flex: 1; }
+
+  .btn-download {
+    background: linear-gradient(135deg, #ff2d55, #ff6b35);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-download:hover { opacity: 0.88; transform: translateY(-1px); }
+  .btn-download:disabled { opacity: 0.4; transform: none; cursor: not-allowed; }
+
+  .dl-status {
+    margin-top: 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+  }
+
+  .dl-status.info { color: var(--accent); }
+  .dl-status.success { color: var(--green); }
+  .dl-status.error { color: var(--yellow); }
+
+  .api-hint {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(255,214,10,0.06);
+    border: 1px solid rgba(255,214,10,0.15);
+    border-radius: 8px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    line-height: 1.6;
+  }
+
+  .api-hint a {
+    color: var(--yellow);
+    text-decoration: none;
+  }
+
+  .api-hint a:hover { text-decoration: underline; }
+
+  .divider-or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .divider-or::before, .divider-or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .divider-or span {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  .video-meta {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 10px;
+  }
+
+  .video-meta img {
+    width: 48px; height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+
+  .video-meta-info { flex: 1; min-width: 0; }
+  .video-meta-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .video-meta-sub {
+    font-size: 0.68rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin-top: 3px;
+  }
+
+  .quality-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .quality-pill {
+    padding: 5px 12px;
+    border-radius: 100px;
+    font-size: 0.72rem;
+    font-family: 'Space Mono', monospace;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+
+  .quality-pill:hover, .quality-pill.active {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(0,229,160,0.08);
+  }
+
+  .quality-pill.hd { border-color: rgba(255,45,85,0.4); color: var(--accent); }
+  .quality-pill.hd:hover, .quality-pill.hd.active {
+    background: rgba(255,45,85,0.08);
+  }
+
+  @media (max-width: 768px) {
+    .player-row { grid-template-columns: 1fr; }
+    .video-container { max-width: 200px; }
+    .url-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo-mark">✂️</div>
+    <h1>Highlight<span>Cut</span></h1>
+    <div class="badge">v1.0 — AUDIO ANALYSIS</div>
+  </header>
+
+  <!-- TIKTOK DOWNLOADER -->
+  <div class="tiktok-block" style="margin-bottom:20px;">
+    <div class="tiktok-block-header">
+      <div class="tiktok-icon">🎵</div>
+      <div>
+        <h3>Importer depuis TikTok</h3>
+        <p>Colle un lien TikTok · téléchargement automatique via RapidAPI</p>
+      </div>
+    </div>
+
+    <div class="api-key-row">
+      <div class="input-wrap" style="flex:1">
+        <input type="password" id="apiKeyInput" placeholder="Clé RapidAPI · tiktok-downloader-without-watermark" autocomplete="off">
+        <span class="input-icon" onclick="toggleApiKeyVis()" title="Afficher/masquer">👁</span>
+      </div>
+      <button class="btn btn-outline" onclick="saveApiKey()" style="white-space:nowrap;padding:10px 16px;font-size:0.78rem;">💾 Sauvegarder</button>
+    </div>
+
+    <div class="url-row">
+      <div class="input-wrap">
+        <input type="url" id="tiktokUrl" placeholder="https://www.tiktok.com/@user/video/…" oninput="onUrlInput()">
+        <span class="input-icon" onclick="pasteUrl()" title="Coller">📋</span>
+      </div>
+      <button class="btn btn-download" id="dlBtn" onclick="downloadTikTok()" disabled>
+        <span id="dlBtnLabel">⬇ Télécharger</span>
+      </button>
+    </div>
+
+    <div id="dlStatus" class="dl-status"></div>
+    <div id="videoMeta" style="display:none"></div>
+    <div id="qualityPills" class="quality-pills" style="display:none"></div>
+
+    <div class="api-hint">
+      ⚡ <strong style="color:var(--yellow)">Clé gratuite en 2 min</strong> →
+      <a href="https://rapidapi.com/yi005/api/tiktok-download-without-watermark" target="_blank">rapidapi.com · yi005 / tiktok-download-without-watermark</a>
+      · Plan gratuit = <strong style="color:var(--text)">500 req/mois</strong> · Clé stockée localement dans ton navigateur.
+    </div>
+
+    <div class="divider-or"><span>OU</span></div>
+    <p style="text-align:center;font-size:0.78rem;color:var(--muted);font-family:'Space Mono',monospace;">Dépose directement un fichier MP4 ci-dessous ↓</p>
+  </div>
+
+  <!-- DROP ZONE -->
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <span class="drop-icon">🎬</span>
+    <h2>Dépose ta vidéo TikTok ici</h2>
+    <p>MP4, MOV, WEBM · Analyse audio automatique des meilleurs moments</p>
+    <input type="file" id="fileInput" accept="video/*">
+  </div>
+
+  <!-- WORKSPACE -->
+  <div class="workspace" id="workspace">
+
+    <!-- PLAYER + CONTROLS -->
+    <div class="player-row">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+        <div class="video-container">
+          <video id="videoPlayer" controls></video>
+        </div>
+        <div style="font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--muted);text-align:center;" id="videoInfo"></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="panel">
+          <div class="panel-title">⚙ Paramètres d'analyse</div>
+
+          <div class="param-row">
+            <div class="param-label">
+              Sensibilité
+              <small>Seuil de détection des pics</small>
+            </div>
+            <input type="range" id="sensitivity" min="1" max="10" value="6" oninput="updateVal('sensitivity','sensitivityVal')">
+            <span class="value-display" id="sensitivityVal">6</span>
+          </div>
+
+          <div class="param-row">
+            <div class="param-label">
+              Durée min. clip
+              <small>Secondes par highlight</small>
+            </div>
+            <input type="range" id="clipDuration" min="2" max="15" value="5" oninput="updateVal('clipDuration','clipDurationVal')">
+            <span class="value-display" id="clipDurationVal">5s</span>
+          </div>
+
+          <div class="param-row">
+            <div class="param-label">
+              Nb. max highlights
+              <small>Limite de segments extraits</small>
+            </div>
+            <input type="range" id="maxHighlights" min="1" max="15" value="5" oninput="updateVal('maxHighlights','maxHighlightsVal')">
+            <span class="value-display" id="maxHighlightsVal">5</span>
+          </div>
+
+          <div class="param-row">
+            <div class="param-label">
+              Marge autour du pic
+              <small>Secondes avant/après</small>
+            </div>
+            <input type="range" id="margin" min="0" max="5" value="1" step="0.5" oninput="updateVal('margin','marginVal','s')">
+            <span class="value-display" id="marginVal">1s</span>
+          </div>
+
+          <div class="divider"></div>
+
+          <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeVideo()">
+            <span>🔍 Analyser la vidéo</span>
+          </button>
+
+          <div id="analyzeStatus"></div>
+          <div class="progress-wrap" id="progressWrap" style="display:none">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">ℹ Info technique</div>
+          <p style="font-size:0.75rem;color:var(--muted);font-family:'Space Mono',monospace;line-height:1.6;">
+            Analyse l'<strong style="color:var(--text)">énergie RMS</strong> du signal audio frame par frame. 
+            Détecte les pics d'intensité sonore (rires, musique forte, réactions). 
+            Export via <strong style="color:var(--text)">FFmpeg.wasm</strong> directement dans ton navigateur.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- WAVEFORM -->
+    <div class="waveform-section">
+      <div class="waveform-header">
+        <div class="panel-title" style="margin:0">📊 Waveform audio — clic pour naviguer</div>
+        <span style="font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--muted);" id="currentTime">0:00</span>
+      </div>
+      <canvas id="waveformCanvas" height="90"></canvas>
+      <div class="time-cursor">
+        <span>0:00</span>
+        <span id="midTime"></span>
+        <span id="totalTime"></span>
+      </div>
+    </div>
+
+    <!-- HIGHLIGHTS -->
+    <div class="highlights-section">
+      <div class="highlights-header">
+        <div class="panel-title" style="margin:0">🔥 Highlights détectés</div>
+        <span class="count-badge" id="highlightCount">0</span>
+        <button class="btn btn-outline" style="margin-left:auto" onclick="selectAll()">Tout sélectionner</button>
+      </div>
+      <div id="highlightsGrid" class="highlights-grid">
+        <div class="empty-state">Lance l'analyse pour détecter les meilleurs moments →</div>
+      </div>
+    </div>
+
+    <!-- EXPORT BAR -->
+    <div class="export-bar" id="exportBar">
+      <div class="export-info">
+        <strong id="selectedCount">0 clips sélectionnés</strong>
+        <small id="exportDuration">Durée totale : 0s</small>
+      </div>
+      <button class="btn btn-green" onclick="exportSelected()">⬇ Exporter les clips</button>
+    </div>
+
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ─── TIKTOK DOWNLOADER ────────────────────────────────────────────────────
+let currentVideoUrls = {};
+
+// Init : charger la clé sauvegardée
+(function initApiKey() {
+  const saved = localStorage.getItem('rapidapi_key');
+  if (saved) {
+    document.getElementById('apiKeyInput').value = saved;
+    setDlStatus('✅ Clé API chargée depuis la mémoire locale', 'success');
+  }
+})();
+
+function saveApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) return setDlStatus('⚠ Entre une clé RapidAPI valide', 'error');
+  localStorage.setItem('rapidapi_key', key);
+  setDlStatus('✅ Clé sauvegardée dans le navigateur', 'success');
+}
+
+function toggleApiKeyVis() {
+  const inp = document.getElementById('apiKeyInput');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function pasteUrl() {
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById('tiktokUrl').value = text;
+    onUrlInput();
+  } catch(e) {
+    setDlStatus('⚠ Autorise le presse-papiers dans ton navigateur', 'error');
+  }
+}
+
+function onUrlInput() {
+  const url = document.getElementById('tiktokUrl').value.trim();
+  const valid = url.includes('tiktok.com') || url.includes('vm.tiktok.com');
+  document.getElementById('dlBtn').disabled = !valid;
+  if (!valid && url.length > 5) setDlStatus('⚠ URL TikTok invalide (doit contenir tiktok.com)', 'error');
+  else document.getElementById('dlStatus').innerHTML = '';
+}
+
+function setDlStatus(msg, type) {
+  const el = document.getElementById('dlStatus');
+  el.textContent = msg;
+  el.className = 'dl-status ' + type;
+}
+
+async function downloadTikTok() {
+  const url = document.getElementById('tiktokUrl').value.trim();
+  const apiKey = document.getElementById('apiKeyInput').value.trim() || localStorage.getItem('rapidapi_key');
+
+  if (!apiKey) return setDlStatus('⚠ Entre ta clé RapidAPI d\'abord', 'error');
+  if (!url) return setDlStatus('⚠ Entre un lien TikTok', 'error');
+
+  const btn = document.getElementById('dlBtn');
+  btn.disabled = true;
+  document.getElementById('dlBtnLabel').innerHTML = '<span class="spinner"></span> Récupération…';
+  document.getElementById('videoMeta').style.display = 'none';
+  document.getElementById('qualityPills').style.display = 'none';
+  currentVideoUrls = {};
+
+  setDlStatus('🔍 Appel API RapidAPI…', 'info');
+
+  try {
+    const response = await fetch(
+      `https://tiktok-download-without-watermark.p.rapidapi.com/analysis?url=${encodeURIComponent(url)}&hd=1`,
+      {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': apiKey,
+          'X-RapidAPI-Host': 'tiktok-download-without-watermark.p.rapidapi.com'
+        }
+      }
+    );
+
+    if (response.status === 403 || response.status === 401) {
+      throw new Error('Clé API invalide ou expirée — vérifie sur RapidAPI');
+    }
+    if (response.status === 429) {
+      throw new Error('Limite mensuelle atteinte (500 req/mois sur plan gratuit)');
+    }
+    if (!response.ok) {
+      throw new Error(`Erreur API : ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Parser la réponse de cette API spécifique
+    const videos = [];
+
+    if (data?.data?.play) videos.push({ label: 'HD sans watermark', url: data.data.play, quality: 'hd' });
+    if (data?.data?.hdplay) videos.push({ label: 'HD+', url: data.data.hdplay, quality: 'hd' });
+    if (data?.data?.wmplay) videos.push({ label: 'Avec watermark', url: data.data.wmplay, quality: 'wm' });
+
+    // Fallback pour d'autres structures de réponse
+    if (videos.length === 0 && data?.video) {
+      if (Array.isArray(data.video)) {
+        data.video.forEach((v, i) => videos.push({ label: `Qualité ${i+1}`, url: v, quality: i === 0 ? 'hd' : 'sd' }));
+      } else {
+        videos.push({ label: 'Vidéo', url: data.video, quality: 'hd' });
+      }
+    }
+
+    if (videos.length === 0) {
+      throw new Error('Aucune URL vidéo trouvée dans la réponse — vidéo privée ou supprimée ?');
+    }
+
+    // Afficher les métadonnées
+    const meta = data?.data;
+    if (meta) {
+      const author = meta.author?.nickname || meta.author || 'Auteur inconnu';
+      const title = meta.title || meta.desc || 'Vidéo TikTok';
+      const cover = meta.cover || meta.origin_cover || '';
+      const duration = meta.duration ? `${meta.duration}s` : '';
+      const plays = meta.play_count ? `${(meta.play_count/1000).toFixed(0)}K vues` : '';
+
+      document.getElementById('videoMeta').style.display = 'flex';
+      document.getElementById('videoMeta').className = 'video-meta';
+      document.getElementById('videoMeta').innerHTML = `
+        ${cover ? `<img src="${cover}" onerror="this.style.display='none'">` : ''}
+        <div class="video-meta-info">
+          <div class="video-meta-title">${title}</div>
+          <div class="video-meta-sub">@${author} ${duration ? '· ' + duration : ''} ${plays ? '· ' + plays : ''}</div>
+        </div>
+      `;
+    }
+
+    // Afficher les boutons de qualité
+    currentVideoUrls = {};
+    videos.forEach(v => currentVideoUrls[v.label] = v.url);
+
+    const pillsEl = document.getElementById('qualityPills');
+    pillsEl.style.display = 'flex';
+    pillsEl.innerHTML = videos.map((v, i) => `
+      <button class="quality-pill ${v.quality === 'hd' ? 'hd' : ''} ${i === 0 ? 'active' : ''}"
+        onclick="selectQuality(this, '${v.label}')">
+        ${v.quality === 'hd' ? '⭐ ' : ''}${v.label}
+      </button>
+    `).join('') + `<button class="quality-pill" style="border-color:var(--green);color:var(--green)" onclick="loadVideoIntoPlayer()">▶ Charger dans l'app</button>`;
+
+    // Auto-charger la première qualité
+    window._selectedVideoUrl = videos[0].url;
+    setDlStatus(`✅ ${videos.length} qualité(s) disponible(s) — choisis et charge dans l'app`, 'success');
+
+  } catch(err) {
+    setDlStatus(`❌ ${err.message}`, 'error');
+  }
+
+  btn.disabled = false;
+  document.getElementById('dlBtnLabel').innerHTML = '⬇ Télécharger';
+}
+
+function selectQuality(el, label) {
+  document.querySelectorAll('.quality-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  window._selectedVideoUrl = currentVideoUrls[label];
+}
+
+async function loadVideoIntoPlayer() {
+  const videoUrl = window._selectedVideoUrl;
+  if (!videoUrl) return setDlStatus('⚠ Sélectionne une qualité d\'abord', 'error');
+
+  setDlStatus('⬇ Téléchargement de la vidéo…', 'info');
+
+  try {
+    const response = await fetch(videoUrl);
+    if (!response.ok) throw new Error(`Erreur téléchargement : ${response.status}`);
+
+    const blob = await response.blob();
+    const file = new File([blob], 'tiktok_video.mp4', { type: 'video/mp4' });
+    setDlStatus('✅ Vidéo chargée — lance l\'analyse !', 'success');
+    loadVideo(file);
+
+    // Scroll vers le player
+    setTimeout(() => document.getElementById('workspace').scrollIntoView({ behavior: 'smooth' }), 300);
+
+  } catch(err) {
+    // CORS probable — proposer le téléchargement direct
+    setDlStatus('⚠ CORS bloqué par le navigateur — ouverture du lien direct pour téléchargement manuel…', 'error');
+    setTimeout(() => {
+      const a = document.createElement('a');
+      a.href = videoUrl;
+      a.target = '_blank';
+      a.download = 'tiktok_video.mp4';
+      a.click();
+      setDlStatus('📥 Téléchargement lancé — glisse ensuite le fichier dans la zone ci-dessous', 'info');
+    }, 1000);
+  }
+}
+
+// ─── STATE ────────────────────────────────────────────────────────────────
+let videoFile = null;
+let audioBuffer = null;
+let highlights = [];
+let selected = new Set();
+let waveformData = [];
+let videoDuration = 0;
+
+// ─── UTILS ────────────────────────────────────────────────────────────────
+function updateVal(id, displayId, suffix = '') {
+  const v = document.getElementById(id).value;
+  document.getElementById(displayId).textContent = v + suffix;
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+function setStatus(msg, type = 'info') {
+  document.getElementById('analyzeStatus').innerHTML = `<div class="status ${type}">${msg}</div>`;
+}
+
+function setProgress(pct) {
+  const wrap = document.getElementById('progressWrap');
+  wrap.style.display = pct < 100 ? 'block' : 'none';
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+// ─── FILE HANDLING ─────────────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('video/')) loadVideo(f);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadVideo(e.target.files[0]); });
+
+function loadVideo(file) {
+  videoFile = file;
+  const url = URL.createObjectURL(file);
+  const vid = document.getElementById('videoPlayer');
+  vid.src = url;
+  vid.ontimeupdate = () => {
+    document.getElementById('currentTime').textContent = formatTime(vid.currentTime);
+    drawWaveform(vid.currentTime);
+  };
+  vid.onloadedmetadata = () => {
+    videoDuration = vid.duration;
+    document.getElementById('videoInfo').textContent =
+      `${file.name} · ${formatTime(videoDuration)} · ${(file.size / 1024 / 1024).toFixed(1)}MB`;
+    document.getElementById('totalTime').textContent = formatTime(videoDuration);
+    document.getElementById('midTime').textContent = formatTime(videoDuration / 2);
+  };
+  dropZone.style.display = 'none';
+  document.getElementById('workspace').classList.add('active');
+}
+
+// ─── AUDIO ANALYSIS ────────────────────────────────────────────────────────
+async function analyzeVideo() {
+  if (!videoFile) return;
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Analyse en cours…';
+  highlights = [];
+  selected.clear();
+
+  try {
+    setStatus('⏳ Décodage audio…', 'info');
+    setProgress(10);
+
+    // Decode audio
+    const arrayBuffer = await videoFile.arrayBuffer();
+    setProgress(30);
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioContext();
+    audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    setProgress(50);
+    setStatus('📊 Analyse de l\'énergie RMS…', 'info');
+
+    // Extract RMS energy
+    const data = extractRMSEnergy(audioBuffer);
+    waveformData = data;
+    setProgress(70);
+
+    // Detect peaks
+    const sensitivity = parseInt(document.getElementById('sensitivity').value);
+    const clipDuration = parseFloat(document.getElementById('clipDuration').value);
+    const maxHighlights = parseInt(document.getElementById('maxHighlights').value);
+    const margin = parseFloat(document.getElementById('margin').value);
+
+    highlights = detectHighlights(data, audioBuffer.duration, sensitivity, clipDuration, maxHighlights, margin);
+    setProgress(90);
+
+    drawWaveform(0);
+    renderHighlights();
+    setProgress(100);
+    setStatus(`✅ ${highlights.length} highlight(s) détecté(s) !`, 'success');
+
+  } catch (err) {
+    setStatus(`❌ Erreur : ${err.message}`, 'warn');
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>🔍 Ré-analyser</span>';
+}
+
+function extractRMSEnergy(buffer) {
+  // Mix all channels
+  const length = buffer.length;
+  const channels = buffer.numberOfChannels;
+  const frameSize = Math.floor(buffer.sampleRate / 50); // 20ms frames
+  const numFrames = Math.floor(length / frameSize);
+  const rms = new Float32Array(numFrames);
+
+  for (let i = 0; i < numFrames; i++) {
+    let sum = 0;
+    for (let c = 0; c < channels; c++) {
+      const channelData = buffer.getChannelData(c);
+      for (let j = 0; j < frameSize; j++) {
+        const s = channelData[i * frameSize + j] || 0;
+        sum += s * s;
+      }
+    }
+    rms[i] = Math.sqrt(sum / (frameSize * channels));
+  }
+
+  return rms;
+}
+
+function detectHighlights(rms, duration, sensitivity, clipDuration, maxCount, margin) {
+  // Smooth the signal
+  const smoothed = smooth(rms, 15);
+
+  // Normalize
+  const max = Math.max(...smoothed);
+  const normalized = smoothed.map(v => v / max);
+
+  // Dynamic threshold based on sensitivity (1=very sensitive, 10=very selective)
+  const sorted = [...normalized].sort((a,b) => b - a);
+  const topN = Math.floor(sorted.length * (0.05 + (10 - sensitivity) * 0.03));
+  const threshold = sorted[Math.min(topN, sorted.length - 1)] || 0.5;
+
+  const frameTime = duration / rms.length;
+  const framesPerClip = Math.floor(clipDuration / frameTime);
+  const marginFrames = Math.floor(margin / frameTime);
+
+  // Find peaks above threshold
+  const peaks = [];
+  for (let i = marginFrames; i < normalized.length - marginFrames - framesPerClip; i++) {
+    if (normalized[i] >= threshold) {
+      // Local maximum check
+      let isLocal = true;
+      const window = Math.floor(framesPerClip * 0.5);
+      for (let j = Math.max(0, i - window); j < Math.min(normalized.length, i + window); j++) {
+        if (j !== i && normalized[j] > normalized[i]) { isLocal = false; break; }
+      }
+      if (isLocal) peaks.push({ frame: i, score: normalized[i] });
+    }
+  }
+
+  // Sort by score
+  peaks.sort((a, b) => b.score - a.score);
+
+  // Non-maximum suppression (avoid overlapping clips)
+  const minGapFrames = framesPerClip + marginFrames * 2;
+  const selected = [];
+  for (const peak of peaks) {
+    if (selected.length >= maxCount) break;
+    const overlap = selected.some(s => Math.abs(s.frame - peak.frame) < minGapFrames);
+    if (!overlap) selected.push(peak);
+  }
+
+  // Convert to time segments
+  return selected.map((p, i) => {
+    const center = p.frame * frameTime;
+    const start = Math.max(0, center - margin - clipDuration * 0.3);
+    const end = Math.min(duration, start + clipDuration);
+    return {
+      id: i,
+      start: parseFloat(start.toFixed(2)),
+      end: parseFloat(end.toFixed(2)),
+      score: parseFloat((p.score * 100).toFixed(1)),
+      centerFrame: p.frame
+    };
+  }).sort((a, b) => a.start - b.start);
+}
+
+function smooth(arr, windowSize) {
+  const out = new Float32Array(arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - windowSize); j <= Math.min(arr.length - 1, i + windowSize); j++) {
+      sum += arr[j]; count++;
+    }
+    out[i] = sum / count;
+  }
+  return out;
+}
+
+// ─── WAVEFORM RENDER ───────────────────────────────────────────────────────
+function drawWaveform(currentTimeSec) {
+  const canvas = document.getElementById('waveformCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth;
+  const H = canvas.height;
+  canvas.width = W;
+
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  ctx.fillRect(0, 0, W, H);
+
+  if (waveformData.length === 0) {
+    ctx.fillStyle = '#2a2a3a';
+    ctx.font = '12px Space Mono';
+    ctx.fillText('Lance l\'analyse pour voir la waveform', W/2 - 150, H/2);
+    return;
+  }
+
+  const max = Math.max(...waveformData) || 1;
+  const step = waveformData.length / W;
+
+  // Draw waveform
+  for (let x = 0; x < W; x++) {
+    const frameIdx = Math.floor(x * step);
+    const val = (waveformData[frameIdx] || 0) / max;
+    const barH = Math.max(2, val * (H - 10));
+
+    // Color based on position relative to current time
+    const timePct = currentTimeSec / videoDuration;
+    const xPct = x / W;
+
+    let color;
+    if (xPct < timePct) {
+      color = '#ff2d55';
+    } else {
+      color = '#2a2a3a';
+    }
+
+    // Highlight regions
+    for (const hl of highlights) {
+      const startX = (hl.start / videoDuration) * W;
+      const endX = (hl.end / videoDuration) * W;
+      if (x >= startX && x <= endX) {
+        color = selected.has(hl.id) ? '#00e5a0' : '#ff6b35';
+      }
+    }
+
+    ctx.fillStyle = color;
+    ctx.fillRect(x, H/2 - barH/2, 1, barH);
+  }
+
+  // Current time cursor
+  if (videoDuration > 0) {
+    const cursorX = (currentTimeSec / videoDuration) * W;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(cursorX, 0);
+    ctx.lineTo(cursorX, H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+// Click waveform to seek
+document.getElementById('waveformCanvas').addEventListener('click', e => {
+  if (!videoDuration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  const vid = document.getElementById('videoPlayer');
+  vid.currentTime = pct * videoDuration;
+});
+
+// ─── HIGHLIGHTS RENDER ─────────────────────────────────────────────────────
+function renderHighlights() {
+  const grid = document.getElementById('highlightsGrid');
+  document.getElementById('highlightCount').textContent = highlights.length;
+
+  if (highlights.length === 0) {
+    grid.innerHTML = '<div class="empty-state">Aucun highlight détecté — baisse la sensibilité</div>';
+    return;
+  }
+
+  grid.innerHTML = highlights.map(hl => `
+    <div class="highlight-card ${selected.has(hl.id) ? 'selected' : ''}" id="card-${hl.id}">
+      <div class="hl-header">
+        <span class="hl-index">CLIP #${hl.id + 1}</span>
+        <div class="hl-score">
+          <div class="score-bar" style="width:${hl.score * 0.6}px"></div>
+          <span style="color:var(--accent2)">${hl.score}%</span>
+        </div>
+      </div>
+      <div class="hl-times">
+        <span>${formatTime(hl.start)}</span>
+        <span style="color:var(--muted);font-size:0.75rem"> → </span>
+        <span>${formatTime(hl.end)}</span>
+        <div class="hl-duration">${(hl.end - hl.start).toFixed(1)}s · score intensité ${hl.score}%</div>
+      </div>
+      <div class="hl-actions">
+        <button class="btn btn-outline" onclick="previewHighlight(${hl.id})" style="font-size:0.75rem;padding:6px 12px;">▶ Preview</button>
+        <label class="checkbox-area">
+          <input type="checkbox" ${selected.has(hl.id) ? 'checked' : ''} onchange="toggleSelect(${hl.id}, this.checked)">
+          Sélectionner
+        </label>
+      </div>
+    </div>
+  `).join('');
+
+  updateExportBar();
+}
+
+function toggleSelect(id, checked) {
+  if (checked) selected.add(id);
+  else selected.delete(id);
+  document.getElementById(`card-${id}`).classList.toggle('selected', checked);
+  drawWaveform(document.getElementById('videoPlayer').currentTime);
+  updateExportBar();
+}
+
+function selectAll() {
+  highlights.forEach(hl => selected.add(hl.id));
+  renderHighlights();
+}
+
+function updateExportBar() {
+  const bar = document.getElementById('exportBar');
+  const n = selected.size;
+  bar.classList.toggle('visible', n > 0);
+  document.getElementById('selectedCount').textContent = `${n} clip${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
+  const totalDur = [...selected].reduce((acc, id) => {
+    const hl = highlights.find(h => h.id === id);
+    return acc + (hl ? hl.end - hl.start : 0);
+  }, 0);
+  document.getElementById('exportDuration').textContent = `Durée totale : ${totalDur.toFixed(1)}s`;
+}
+
+function previewHighlight(id) {
+  const hl = highlights.find(h => h.id === id);
+  if (!hl) return;
+  const vid = document.getElementById('videoPlayer');
+  vid.currentTime = hl.start;
+  vid.play();
+
+  // Stop at end of highlight
+  const stop = () => {
+    if (vid.currentTime >= hl.end) {
+      vid.pause();
+      vid.removeEventListener('timeupdate', stop);
+    }
+  };
+  vid.addEventListener('timeupdate', stop);
+}
+
+// ─── EXPORT ────────────────────────────────────────────────────────────────
+function exportSelected() {
+  const selectedHighlights = highlights.filter(hl => selected.has(hl.id));
+  if (selectedHighlights.length === 0) return;
+
+  // Generate FFmpeg commands for the user
+  const commands = selectedHighlights.map((hl, i) =>
+    `ffmpeg -ss ${hl.start.toFixed(2)} -to ${hl.end.toFixed(2)} -i "input.mp4" -c:v libx264 -c:a aac "highlight_${i+1}_${formatTime(hl.start).replace(':','m')}s.mp4"`
+  ).join('\n');
+
+  // Create downloadable script
+  const script = `#!/bin/bash
+# Généré par HighlightCut
+# Remplacement "input.mp4" par le nom de ton fichier
+
+${commands}
+
+echo "✅ Export terminé !"`;
+
+  const blob = new Blob([script], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'export_highlights.sh';
+  a.click();
+
+  // Also show the timecodes visually
+  const info = selectedHighlights.map(hl =>
+    `Clip ${hl.id+1}: ${formatTime(hl.start)} → ${formatTime(hl.end)} (${(hl.end-hl.start).toFixed(1)}s)`
+  ).join('\n');
+
+  setStatus(`📋 Script FFmpeg téléchargé ! Clips : \n${info}`, 'success');
+
+  // Also try native MediaRecorder approach for direct browser export
+  tryBrowserExport(selectedHighlights);
+}
+
+async function tryBrowserExport(clips) {
+  // Try to export each clip using MediaRecorder if supported
+  const vid = document.getElementById('videoPlayer');
+  if (!window.MediaRecorder) return;
+
+  setStatus('🎬 Export navigateur en cours (peut prendre un moment)…', 'info');
+
+  for (let i = 0; i < clips.length; i++) {
+    const hl = clips[i];
+    await exportClipBrowser(vid, hl, i + 1);
+  }
+}
+
+async function exportClipBrowser(video, hl, index) {
+  return new Promise((resolve) => {
+    try {
+      const canvas = document.createElement('canvas');
+      const stream = video.captureStream ? video.captureStream(30) : null;
+      if (!stream) { resolve(); return; }
+
+      const chunks = [];
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : 'video/webm';
+
+      const rec = new MediaRecorder(stream, { mimeType });
+      rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      rec.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `highlight_${index}_${formatTime(hl.start).replace(':','m')}s.webm`;
+        a.click();
+        resolve();
+      };
+
+      video.currentTime = hl.start;
+      video.onseeked = () => {
+        rec.start();
+        video.play();
+        const checkEnd = () => {
+          if (video.currentTime >= hl.end) {
+            video.pause();
+            rec.stop();
+            video.removeEventListener('timeupdate', checkEnd);
+          }
+        };
+        video.addEventListener('timeupdate', checkEnd);
+      };
+    } catch (e) {
+      resolve();
+    }
+  });
+}
+</script>
+</body>
+</html>
